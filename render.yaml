@@ -1,8 +1,7 @@
 services:
   - type: web
-    name: ajedrez-amigos
+    name: rockchess
     runtime: node
     plan: free
     buildCommand: npm install
     startCommand: npm start
-    healthCheckPath: /api/health
