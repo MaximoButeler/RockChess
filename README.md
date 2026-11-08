@@ -1,24 +1,23 @@
-# RockChess V5 — Multijugador (2 y 3 jugadores)
+# RockChess V11 — Chat funcional
 
-Versión web con menú de selección de modalidad, salas privadas, movimientos por arrastre o clic y premovidas, sonidos originales, explosiones cinematográficas repetibles y sacudida del tablero.
+Corrección de chat para partidas online: clic en Enviar, Enter y envío por WebSocket dentro de sala.
 
-## Modo de juego
-- **2 jugadores**: ajedrez estándar en tablero 8×8, reglas validadas con chess.js.
-- **3 jugadores**: variante experimental 12×12; blancas abajo, negras arriba y doradas a la izquierda. Queda eliminado quien recibe mate (o ahogado, según estas reglas adaptadas). El último jugador en pie gana. No usa enroque ni captura al paso en la variante.
+## Instalación
+Reemplazá los archivos de tu repositorio GitHub con el contenido de esta carpeta (server.js y package.json en raíz, carpeta public en raíz). Hacé commit. Render debe desplegar el último commit, no una versión anterior.
 
-## Publicar actualización en GitHub y Render
-1. Descargá y descomprimí este ZIP.
-2. En GitHub Desktop, cloná `MaximoButeler/RockChess` si todavía no lo hiciste.
-3. Copiá **el contenido de esta carpeta** (archivos `server.js`, `package.json`, `render.yaml`, carpeta `public`, etc.) a la raíz del repositorio local. Reemplazá los archivos existentes, sin crear una carpeta adicional.
-4. En GitHub Desktop: **Commit to main** y **Push origin**.
-5. En Render > RockChess > Deploys, verificá que arranque el despliegue automático; si no, usá **Manual Deploy > Deploy latest commit**.
-6. Cuando aparezca **Live**, abrí tu URL de Render, elegí 2 o 3 jugadores y creá sala privada. Probá con navegadores/dispositivos diferentes.
+## Probar
+1. Abrí la URL del juego alojado en Render.
+2. Creá una sala de 2 jugadores y compartí el enlace.
+3. Abrilo en otro navegador/dispositivo (o incógnito) con un segundo jugador.
+4. Dentro de la sala el chat debe mostrar ● En línea. Escribí un mensaje y presioná Enviar o Enter.
+5. Revisá que el otro navegador vea el mensaje.
 
-## Desarrollo local
-Node.js 20+; `npm install`, después `npm start` y abrir `http://localhost:3000`.
+La versión individual de prueba muestra los mensajes solo localmente, no los envía a amigos.
 
-## Limitaciones
-- Los estados de partida están en memoria; si Render reinicia su servicio, las salas se pierden.
-- Render gratuito puede dormir el servidor tras inactividad.
-- No se verificó aquí una partida completa entre navegadores conectados.
-- La versión para dos jugadores y la de tres jugadores comparten la pantalla de inicio, pero son reglas distintas.
+
+## V12: Redirección al finalizar el susto
+Al llegar al 100 % en la pantalla ficticia de descarga, el navegador abre automáticamente el enlace de YouTube indicado. El enlace externo sustituye la pantalla del juego.
+
+
+## V12: Redirección al finalizar el susto
+Al llegar al 100 % en la pantalla ficticia de descarga, el navegador abre automáticamente el enlace de YouTube indicado. El enlace externo sustituye la pantalla del juego.

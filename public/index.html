@@ -4,5 +4,43 @@
 <div class="modes" id="modes"><button class="mode active" data-mode="2"><div class="mode-art">♔ <span class="vs">VS</span> ♚</div><div class="mode-meta"><strong>DUELO CLÁSICO</strong><span>2 jugadores · Tablero 8×8</span></div><span class="mode-check">✓</span><p>Reglas oficiales, enroques, promoción, tablas y premovidas.</p></button><button class="mode" data-mode="3"><div class="mode-art">♔ <span class="vs">VS</span> ♚ <span class="vs">VS</span> <span class="gold">♚</span></div><div class="mode-meta"><strong>TRIPLE AMENAZA</strong><span>3 jugadores · Tablero 12×12</span></div><span class="mode-check">✓</span><p>Blancas, negras y doradas. Eliminación por mate. Gana el último rey en pie.</p></button></div>
 <div class="setup"><label for="nick">TU NOMBRE</label><input id="nick" maxlength="24" placeholder="Tu apodo"><button id="create" class="primary">CREAR SALA DE 2 JUGADORES →</button></div><p class="foot">Sin registro. Tu invitado entra con el enlace. Las salas se conservan mientras el servidor esté activo.</p></section>
 <section id="game" class="hidden"><div class="game-head"><div><span class="eyebrow" id="modeLabel">SALA PRIVADA</span><h2 id="roomName">RockChess</h2><div id="role"></div></div><div class="head-actions"><button class="primary" id="copy">Copiar invitación</button><button id="home">Inicio</button></div></div>
-<div class="game-layout"><div class="board-area"><div id="players" class="players"></div><div id="boardWrap"><div id="board" class="board"></div><div id="fx"></div></div><div id="status" class="status">Conectando...</div><div id="notice" class="notice"></div><div class="actions"><button id="cancel">Cancelar premovida</button><button id="resign">Rendirse</button><button id="rematch" class="hidden">Revancha</button></div></div><aside><h3>PARTIDA EN VIVO</h3><div id="seats" class="seats"></div><h3>MOVIMIENTOS</h3><div id="history" class="history">Todavía no hay jugadas.</div><h3>INVITACIÓN</h3><input id="invite" readonly><p class="minor">Arrastrá las piezas o seleccioná origen y destino. Se permiten premovidas mientras esperás tu turno.</p><div id="variantInfo" class="variant"></div></aside></div>
-</section></div><div id="promotion" class="overlay hidden"><div class="dialog"><h3>Elegí la promoción</h3><div id="promoChoices"></div><button id="cancelPromo">Cancelar</button></div></div><script type="module" src="/app.js"></script></body></html>
+<div class="game-layout"><div class="board-area"><div id="players" class="players"></div><div id="boardWrap"><div id="board" class="board"></div><div id="fx"></div></div><div id="status" class="status">Conectando...</div><div id="notice" class="notice"></div><div class="actions"><button id="cancel">Cancelar premovida</button><button id="resign">Rendirse</button><button id="rematch" class="hidden">Revancha</button></div></div><aside><h3>PARTIDA EN VIVO</h3><div id="seats" class="seats"></div><h3>MOVIMIENTOS</h3><div id="history" class="history">Todavía no hay jugadas.</div><section class="chat-panel" aria-label="Chat de la sala"><div class="chat-title"><h3>💬 CHAT DE LA PARTIDA</h3><span id="chatStatus" role="status">Conectando…</span></div><div id="chatMessages" class="chat-messages" role="log" aria-live="polite"><div class="chat-info">Mensajes entre participantes y espectadores de esta sala.</div></div><form id="chatForm" class="chat-form"><input id="chatInput" maxlength="300" autocomplete="off" placeholder="Conectando al chat…" aria-label="Mensaje" disabled><button id="chatSend" type="button" disabled>Enviar</button></form><p id="chatFeedback" class="chat-feedback" role="status">Tus mensajes se comparten solo con los participantes de esta sala.</p></section><h3>INVITACIÓN</h3><input id="invite" readonly><p class="minor">Arrastrá las piezas o seleccioná origen y destino. Se permiten premovidas mientras esperás tu turno.</p><div id="variantInfo" class="variant"></div></aside></div>
+</section></div><div id="promotion" class="overlay hidden"><div class="dialog"><h3>Elegí la promoción</h3><div id="promoChoices"></div><button id="cancelPromo">Cancelar</button></div></div><!-- RockChess: cinematic fake-virus prank. Never opens a terminal or downloads anything. -->
+<style>
+#prankOverlay{position:fixed;inset:0;z-index:999999;background:rgba(0,4,13,.92);display:none;align-items:center;justify-content:center;padding:14px;backdrop-filter:blur(8px);font-family:Consolas,"Cascadia Mono",monospace;color:#e5edf7}
+#prankOverlay.prank-on{display:flex}
+.prank-win{width:min(860px,98vw);max-height:94vh;overflow:hidden;border:1px solid #b9404f;border-radius:11px;background:#111720;box-shadow:0 0 0 2px #202a3b,0 25px 115px #000,0 0 80px #8e18223d;animation:prankPop .24s ease-out}
+@keyframes prankPop{from{transform:scale(.92);opacity:.35}to{transform:scale(1);opacity:1}}
+.prank-title{display:flex;gap:10px;align-items:center;padding:12px 15px;background:linear-gradient(90deg,#711321,#32131b);font:700 14px system-ui,sans-serif}
+.prank-title strong{flex:1}.prank-light{width:10px;height:10px;border-radius:50%;background:#ff5362;box-shadow:0 0 12px #ff3b4d;animation:prankBlink .8s infinite alternate}
+@keyframes prankBlink{to{opacity:.25}}
+.prank-body{padding:21px 23px 22px}
+.prank-warning{font:900 clamp(20px,4vw,35px) system-ui,sans-serif;letter-spacing:.02em;color:#ff6f77;text-shadow:0 0 18px #fa203b80}
+.prank-sub{font:14px/1.55 system-ui,sans-serif;color:#c4cad4;margin:7px 0 18px}
+.prank-stats{display:flex;justify-content:space-between;gap:10px;font:700 12px Consolas,monospace;color:#d0d7e2;margin-bottom:7px}
+.prank-bar{height:22px;background:#080c13;border:1px solid #96343f;border-radius:4px;padding:3px;overflow:hidden;box-shadow:inset 0 2px 5px #000}
+#prankFill{height:100%;width:0%;background:repeating-linear-gradient(112deg,#f63b51 0px,#f63b51 16px,#ff8b3d 16px,#ff8b3d 24px);box-shadow:0 0 18px #ff354b;transition:width .12s linear}
+.prank-terminal{margin-top:17px;background:#050a0b;border:1px solid #40555a;border-radius:6px;overflow:hidden}
+.prank-terminal-head{background:#1b2830;color:#cfd8d9;padding:8px 11px;font:12px Consolas,monospace}
+#prankLogs{height:min(215px,28vh);min-height:120px;overflow:hidden;padding:12px 13px;font:12px/1.5 Consolas,monospace;color:#63e7a1;white-space:pre-wrap;overflow-wrap:anywhere}
+.prank-controls{display:flex;justify-content:space-between;align-items:center;margin-top:16px;gap:10px;flex-wrap:wrap}
+.prank-controls button{background:#242f3c;color:#eef5f7;border:1px solid #697b8a;border-radius:7px;padding:10px 14px;font:700 13px system-ui,sans-serif;cursor:pointer}
+
+@media(prefers-reduced-motion:reduce){.prank-win,.prank-light{animation:none!important}}
+</style>
+<div id="prankOverlay" role="dialog" aria-modal="true" aria-label="Broma de jaque mate">
+ <div class="prank-win">
+  <div class="prank-title"><span class="prank-light"></span><strong>⚠ ROCKCHESS SECURITY SYSTEM</strong><span>✕</span></div>
+  <div class="prank-body">
+   <div class="prank-warning">⚠ DESCARGANDO VIRUS...</div>
+   <div class="prank-sub" id="prankMessage">Actividad inusual detectada después del jaque mate. Iniciando secuencia...</div>
+   <div class="prank-stats"><span>PROGRESO DE INSTALACIÓN</span><span id="prankPercent">0%</span></div>
+   <div class="prank-bar"><div id="prankFill"></div></div>
+   <div class="prank-terminal"><div class="prank-terminal-head">● consola_de_diagnostico.exe — sesión simulada</div><div id="prankLogs" aria-live="off"></div></div>
+   
+   <div class="prank-controls"><span style="font:12px system-ui,sans-serif;color:#a6afbd">RockChess · Secuencia cinematográfica ficticia</span><button id="prankClose" type="button">Salir del susto ✕</button></div>
+  </div>
+ </div>
+</div>
+
+<script src="/prank.js"></script><script type="module" src="/app.js"></script></body></html>

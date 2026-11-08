@@ -24,13 +24,24 @@ function snapshot(room,role){const c=room.mode===2?room.chess:room.three;return 
 function broadcast(room){for(const ws of room.clients)send(ws,snapshot(room,ws.role));}
 function restart(room){room.chess=room.mode===2?new Chess():null;room.three=room.mode===3?initial3():null;room.resigned=null;room.effects=null;room.seq=0;room.rematch.clear();}
 app.get('/api/health',(_req,res)=>res.json({ok:true}));
-app.post('/api/rooms',(req,res)=>{if(!tokenOK(req.body?.token)||![2,3].includes(req.body?.mode))return res.status(400).json({error:'Datos inválidos'});const code=crypto.randomBytes(8).toString('hex');const room={code,mode:req.body.mode,players:{w:{token:req.body.token,name:name(req.body.name)},b:null,g:null},clients:new Set(),rematch:new Set(),touched:Date.now()};restart(room);rooms.set(code,room);res.status(201).json({code});});
+app.post('/api/rooms',(req,res)=>{if(!tokenOK(req.body?.token)||![2,3].includes(req.body?.mode))return res.status(400).json({error:'Datos inválidos'});const code=crypto.randomBytes(8).toString('hex');const room={code,mode:req.body.mode,players:{w:{token:req.body.token,name:name(req.body.name)},b:null,g:null},clients:new Set(),rematch:new Set(),chat:[],touched:Date.now()};restart(room);rooms.set(code,room);res.status(201).json({code});});
 app.get('/sala/:code',(_req,res)=>res.sendFile(path.join(root,'public/index.html')));
 wss.on('connection',ws=>{ws.isAlive=true;ws.on('pong',()=>ws.isAlive=true);ws.on('message',raw=>{let m;try{m=JSON.parse(String(raw));}catch{return send(ws,{type:'error',message:'Mensaje inválido'});}if(m.type==='join'){
  if(ws.room)return;const room=rooms.get(m.code);if(!room||!tokenOK(m.token))return send(ws,{type:'error',message:'Sala inexistente o identificación inválida'});
  if(!roleFor(room,m.token)||roleFor(room,m.token)==='spectator'){const available=colors.slice(0,required(room)).find(c=>!room.players[c]);if(available)room.players[available]={token:m.token,name:name(m.name)};}
- ws.room=room;ws.token=m.token;ws.role=roleFor(room,m.token);room.clients.add(ws);broadcast(room);return;
- }const room=ws.room;if(!room)return send(ws,{type:'error',message:'Entrá a una sala'});room.touched=Date.now();if(m.type==='move'){
+ ws.room=room;ws.token=m.token;ws.role=roleFor(room,m.token);room.clients.add(ws);send(ws,{type:'chat_history',items:room.chat});broadcast(room);return;
+ }const room=ws.room;if(!room)return send(ws,{type:'error',message:'Entrá a una sala'});room.touched=Date.now();if(m.type==='chat'){
+ if(typeof m.text!=='string')return send(ws,{type:'error',message:'Mensaje inválido'});
+ const value=m.text.replace(/[\x00-\x1f\x7f]/g,' ').trim().slice(0,300);
+ if(!value)return;
+ if(ws.lastChatAt && Date.now()-ws.lastChatAt<700)return send(ws,{type:'error',message:'Esperá un momento antes de escribir de nuevo'});
+ ws.lastChatAt=Date.now();
+ const item={id:crypto.randomBytes(6).toString('hex'),name:name(room.players[ws.role]?.name||m.name||(ws.role==='spectator'?'Espectador':'Jugador')),role:ws.role,text:value,at:Date.now()};
+ room.chat.push(item);if(room.chat.length>60)room.chat.shift();
+ for(const peer of room.clients)send(peer,{type:'chat',item});
+ send(ws,{type:'chat_ack',clientId:typeof m.clientId==='string'?m.clientId.slice(0,80):''});return;
+ }
+ if(m.type==='move'){
  if(ended(room)||!ready(room)||ws.role!==(room.mode===2?room.chess.turn():room.three.turn))return send(ws,{type:'error',message:'No es tu turno o la partida está cerrada'});
  try{const oldEliminations=room.mode===3?room.three.eliminated.length:0;let move;if(room.mode===2){if(!/^[a-h][1-8]$/.test(m.from)||!/^[a-h][1-8]$/.test(m.to))throw Error('Casilla inválida');move=room.chess.move({from:m.from,to:m.to,...(m.promotion?{promotion:m.promotion}:{})});}
  else{if(!Number.isInteger(m.from)||!Number.isInteger(m.to))throw Error('Casilla inválida');room.three=apply3(room.three,m);move=room.three.last;}

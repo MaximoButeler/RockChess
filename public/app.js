@@ -72,10 +72,60 @@ document.querySelectorAll('.mode').forEach(btn=>btn.addEventListener('click',()=
 $('create').onclick=async()=>{identity.name=$('nick').value.trim().slice(0,24)||'Jugador';localStorage.setItem(ID,JSON.stringify(identity));$('create').disabled=true;try{const response=await fetch('/api/rooms',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...identity,mode})});const json=await response.json();if(!response.ok)throw Error(json.error||'Error');location.href='/sala/'+json.code;}catch(e){alert(e.message);$('create').disabled=false;}};
 $('home').onclick=()=>location.href='/';$('copy').onclick=async()=>{try{await navigator.clipboard.writeText(location.href);$('copy').textContent='¡ENLACE COPIADO!';setTimeout(()=>$('copy').textContent='Copiar invitación',1400)}catch{$('invite').select();document.execCommand('copy');}};
 $('cancel').onclick=()=>{premove=null;select=null;renderBoard();note('Premovida cancelada')};$('resign').onclick=()=>{if(confirm('¿Abandonar la partida?'))send({type:'resign'})};$('rematch').onclick=()=>send({type:'rematch'});$('cancelPromo').onclick=()=>{$('promotion').classList.add('hidden');waitingPromotion=null;};document.addEventListener('keydown',e=>{if(e.key==='Escape'){$('cancel').click()}});
+
+// Chat real por WebSocket: el servidor confirma cada envío; si no hay conexión no se borra el texto.
+const chatSeen=new Set();let chatJoined=false;let pendingChats=new Map();
+function chatConnection(online){
+ chatJoined=online;
+ $('chatInput').disabled=!online;$('chatSend').disabled=!online;
+ $('chatInput').placeholder=online?'Escribí a tus amigos…':'Esperando conexión con la sala…';
+ $('chatStatus').textContent=online?'● En línea':'● Desconectado';
+ $('chatStatus').classList.toggle('online',online);
+}
+function chatFeedback(t,failed=false){$('chatFeedback').textContent=t;$('chatFeedback').classList.toggle('fail',failed);}
+function addChat(item){
+ if(!item||typeof item.text!=='string'||chatSeen.has(item.id))return;
+ chatSeen.add(item.id);
+ const row=document.createElement('div');row.className='chat-msg'+(item.role===state?.role?' mine':'');
+ const author=document.createElement('div');author.className='who';
+ author.textContent=(item.name||'Jugador')+(item.role==='spectator'?' · espectador':'');
+ const when=document.createElement('span');when.className='when';when.textContent=new Date(item.at||Date.now()).toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'});author.append(when);
+ const body=document.createElement('div');body.textContent=item.text;
+ row.append(author,body);$('chatMessages').append(row);
+ if($('chatMessages').children.length>65)$('chatMessages').children[0].remove();
+ $('chatMessages').scrollTop=$('chatMessages').scrollHeight;
+}
+function submitRoomChat(e){
+ e?.preventDefault();e?.stopPropagation();const input=$('chatInput');const value=input.value.trim();if(!value){chatFeedback('Escribí un mensaje para enviarlo.');return;}
+ if(!chatJoined||ws?.readyState!==WebSocket.OPEN){chatFeedback('No hay conexión con la sala. El mensaje no se envió.',true);return;}
+ const id='msg-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,8);
+ pendingChats.set(id,value);
+ try{ws.send(JSON.stringify({type:'chat',text:value,clientId:id}));input.value='';chatFeedback('Enviando mensaje…');input.focus();}
+ catch{pendingChats.delete(id);chatFeedback('Error al enviar. Reintentá.',true);input.value=value;}
+}
+$('chatForm').addEventListener('submit',submitRoomChat);
+$('chatSend').addEventListener('click',submitRoomChat);
+$('chatInput').addEventListener('keydown',e=>{e.stopPropagation();if(e.key==='Enter'&&!e.shiftKey)submitRoomChat(e);});
+$('chatInput').addEventListener('pointerdown',e=>e.stopPropagation());
+chatConnection(false);
+let prankMateKey='';
+function maybePrank(prev,data){
+ if(!data||data.role==='spectator'||!data.checkmate)return;
+ const defeated=data.mode===2?data.finished&&data.turn===data.role:data.eliminated?.some(x=>x.color===data.role&&x.reason==='Jaque mate');
+ if(!defeated)return;
+ const key=data.code+':'+data.seq+':'+data.role;
+ if(key===prankMateKey)return;prankMateKey=key;
+ if(!prev||prev.seq!==data.seq)setTimeout(()=>window.triggerRockChessPrank?.(),data.effects?.piece==='r'&&data.effects?.capture?2150:800);
+}
 const code=location.pathname.match(/^\/sala\/([a-f0-9]{16})$/)?.[1];if(code){$('lobby').classList.add('hidden');$('game').classList.remove('hidden');$('invite').value=location.href;connect();}
-function connect(){let url=(location.protocol==='https:'?'wss://':'ws://')+location.host+'/ws';ws=new WebSocket(url);ws.onopen=()=>{$('net').textContent='● Conectado';send({type:'join',code,token:identity.token,name:identity.name});};ws.onclose=()=>{$('net').textContent='● Reconectando';setTimeout(connect,1700)};ws.onmessage=e=>{let data;try{data=JSON.parse(e.data)}catch{return};if(data.type==='error'){note(data.message);return;}if(data.type!=='state')return;
- const prev=state;state=data;mode=data.mode;if(prev&&prev.seq!==data.seq){effects(data.effects,prev.seq);if(data.effects?.capture)blast(data.last?.to);}
- render();if(prev&&premove&&state.turn===state.role&&state.ready&&!state.finished){const p=premove;premove=null;if(state.legal.some(m=>m.from===p.from&&m.to===p.to)){send({type:'move',...p});note('Premovida ejecutada.')}else note('Premovida cancelada: dejó de ser legal.');}
+function connect(){chatConnection(false);let url=(location.protocol==='https:'?'wss://':'ws://')+location.host+'/ws';ws=new WebSocket(url);ws.onopen=()=>{$('net').textContent='● Conectado';send({type:'join',code,token:identity.token,name:identity.name});};ws.onclose=()=>{chatConnection(false);$('net').textContent='● Reconectando';chatFeedback('Chat desconectado. Si estabas escribiendo, tu texto se conserva.',true);setTimeout(connect,1700)};ws.onmessage=e=>{let data;try{data=JSON.parse(e.data)}catch{return};if(data.type==='error'){note(data.message);chatFeedback(data.message,true);return;}if(data.type==='chat_history'){chatConnection(true);$('chatMessages').replaceChildren();chatSeen.clear();for(const item of data.items||[])addChat(item);chatFeedback('Conectado a la sala. Podés enviar mensajes.');return;}if(data.type==='chat'){addChat(data.item);return;}if(data.type==='chat_ack'){if(pendingChats.has(data.clientId)){pendingChats.delete(data.clientId);chatFeedback('Mensaje enviado ✓');}return;}if(data.type!=='state')return;
+ const prev=state;state=data;mode=data.mode;
+ const changed=!!prev&&prev.seq!==data.seq;
+ const rookCinema=changed&&data.effects?.piece==='r'&&!!data.effects?.capture;
+ if(changed){if(rookCinema){timers.forEach(clearTimeout);timers=[];queue('rook-capture',160);if(data.effects.mate)queue('checkmate',2000);else if(data.effects.check)queue('check-1',1950);}
+ else effects(data.effects,prev.seq);}
+
+ render();maybePrank(prev,data);if(changed){if(rookCinema){if(!cinematicRookCapture(prev,data))blast(data.last?.to);else queue('explosion-'+((data.effects.captureIndex??0)+1),1770);}else if(data.effects?.capture)blast(data.last?.to);}if(prev&&premove&&state.turn===state.role&&state.ready&&!state.finished){const p=premove;premove=null;if(state.legal.some(m=>m.from===p.from&&m.to===p.to)){send({type:'move',...p});note('Premovida ejecutada.')}else note('Premovida cancelada: dejó de ser legal.');}
  };}
 function normalize2(){const b=Array(64).fill(null),rows=state.fen.split(' ')[0].split('/');rows.forEach((row,y)=>{let x=0;for(let ch of row){if(/\d/.test(ch))x+=Number(ch);else{b[y*8+x]=(ch===ch.toUpperCase()?'w:':'b:')+ch.toLowerCase();x++}}});return b;}
 const coord2=i=>'abcdefgh'[i%8]+(8-Math.floor(i/8));const index2=s=>(8-Number(s[1]))*8+'abcdefgh'.indexOf(s[0]);
@@ -88,9 +138,106 @@ function choose(from,to){if(!canPlay())return;if(current()){
 function promote(from,to,isPre){waitingPromotion={from,to,isPre};$('promoChoices').replaceChildren();for(const t of ['q','r','b','n']){const btn=document.createElement('button');btn.textContent=glyph[t];btn.onclick=()=>{if(isPre)premove={from,to,promotion:t};else send({type:'move',from,to,promotion:t});$('promotion').classList.add('hidden');waitingPromotion=null;renderBoard();};$('promoChoices').append(btn);}$('promotion').classList.remove('hidden');}
 function press(i){if(!canPlay()||waitingPromotion)return;const pieces=mode===2?normalize2():state.board,p=pieces[i];if(select!=null){if(i===select){select=null;renderBoard();return;}if(mine(p)){select=i;renderBoard();return;}const from=select;select=null;if(!current()&&mode===2&&pname(pieces[from])==='p'&&[0,7].includes(Math.floor(i/8))){promote(from,i,true);return;}choose(mode===2?coord2(from):from,mode===2?coord2(i):i);return;}if(mine(p)){select=i;renderBoard();}}
 function locate(e){const el=document.elementFromPoint(e.clientX,e.clientY)?.closest?.('[data-idx]');return el?Number(el.dataset.idx):null;}
-function down(e,i){if(e.button!==0)return;const pieces=mode===2?normalize2():state.board;if(!canPlay()||!mine(pieces[i]))return;drag={i,x:e.clientX,y:e.clientY,origin:e.currentTarget,p:pieces[i],started:false};try{e.currentTarget.setPointerCapture(e.pointerId);}catch{}}
-function move(e){if(!drag)return;if(!drag.started&&Math.hypot(e.clientX-drag.x,e.clientY-drag.y)>6){drag.started=true;drag.ghost=document.createElement('div');drag.ghost.className='piece drag-piece '+owner(drag.p);drag.ghost.textContent=glyph[pname(drag.p)];drag.ghost.style.fontSize='52px';document.body.append(drag.ghost);}if(drag.started){drag.ghost.style.left=e.clientX+'px';drag.ghost.style.top=e.clientY+'px';}}
-function up(e){if(!drag)return;const d=drag;drag=null;d.ghost?.remove();if(d.started){const to=locate(e);if(to!==null){const from=mode===2?coord2(d.i):d.i,dest=mode===2?coord2(to):to;if(!current()&&mode===2&&pname(d.p)==='p'&&[0,7].includes(Math.floor(to/8)))promote(from,dest,true);else choose(from,dest);}else renderBoard();}else press(d.i);}
+// Visual-only spring/inertia physics. Legal moves remain validated by the server.
+let dragAnimation=null;
+function dragTick(t){
+ if(!drag||!drag.started||!drag.ghost){dragAnimation=null;return;}
+ const d=drag;
+ const dt=Math.min(.035,Math.max(.007,(t-(d.lastFrame||t-16))/1000));d.lastFrame=t;
+ const tension=64,damping=13;
+ const ax=(d.targetX-d.posX)*tension-d.velX*damping;
+ const ay=(d.targetY-d.posY)*tension-d.velY*damping;
+ d.velX+=ax*dt;d.velY+=ay*dt;d.posX+=d.velX*dt;d.posY+=d.velY*dt;
+ // Moment of inertia based on the actual grabbed point (off-center grabs twist more).
+ const armX=d.grabX,armY=d.grabY;
+ const torque=(armX*ay-armY*ax)*.013;
+ d.angularVel+=(torque-d.angle*14-d.angularVel*8)*dt;
+ d.angle+=d.angularVel*dt;
+ d.angle=Math.max(-40,Math.min(40,d.angle));
+ d.ghost.style.left=d.posX+'px';d.ghost.style.top=d.posY+'px';
+ d.ghost.style.transform=`translate(-50%,-50%) rotate(${d.angle.toFixed(2)}deg)`;
+ dragAnimation=requestAnimationFrame(dragTick);
+}
+function down(e,i){
+ if(e.button!==0)return;
+ const pieces=mode===2?normalize2():state.board;
+ if(!canPlay()||!mine(pieces[i]))return;
+ const cell=e.currentTarget.getBoundingClientRect(),size=cell.width;
+ // Grab location is measured relative to the center of the piece, not simply the cursor.
+ drag={i,x:e.clientX,y:e.clientY,targetX:e.clientX,targetY:e.clientY,
+  posX:e.clientX,posY:e.clientY,velX:0,velY:0,angle:0,angularVel:0,
+  grabX:(e.clientX-(cell.left+cell.width/2))/Math.max(1,size/2),
+  grabY:(e.clientY-(cell.top+cell.height/2))/Math.max(1,size/2),
+  size,p:pieces[i],started:false,pointerId:e.pointerId};
+ try{e.currentTarget.setPointerCapture(e.pointerId);}catch{}
+}
+function move(e){
+ if(!drag||e.pointerId!==drag.pointerId)return;
+ const d=drag;d.targetX=e.clientX;d.targetY=e.clientY;
+ if(!d.started&&Math.hypot(e.clientX-d.x,e.clientY-d.y)>5){
+  d.started=true;d.ghost=document.createElement('div');
+  d.ghost.className='piece drag-piece dynamic-piece '+owner(d.p);
+  d.ghost.textContent=glyph[pname(d.p)];d.ghost.style.fontSize=(d.size*.79)+'px';
+  d.ghost.style.left=d.posX+'px';d.ghost.style.top=d.posY+'px';
+  document.body.append(d.ghost);
+  const origin=$('board').querySelector(`[data-idx="${d.i}"] .piece`);
+  if(origin)origin.style.visibility='hidden';
+  dragAnimation=requestAnimationFrame(dragTick);
+ }
+}
+function up(e){
+ if(!drag||e.pointerId!==drag.pointerId)return;
+ const d=drag;drag=null;
+ if(d.started){
+  // Find target BEFORE starting the landing animation.
+  const to=locate(e);
+  if(d.ghost){
+   const ghost=d.ghost;const initialX=d.posX,initialY=d.posY,initialAngle=d.angle;
+   const target=to!==null?$('board').querySelector(`[data-idx="${to}"]`):$('board').querySelector(`[data-idx="${d.i}"]`);
+   const box=target?.getBoundingClientRect();
+   if(box){
+    ghost.animate([{left:initialX+'px',top:initialY+'px',transform:`translate(-50%,-50%) rotate(${initialAngle}deg)`,opacity:1},
+     {left:(box.left+box.width/2)+'px',top:(box.top+box.height/2)+'px',transform:'translate(-50%,-50%) rotate(0deg)',opacity:.7}],
+     {duration:280,easing:'cubic-bezier(.12,.7,.22,1)'}).onfinish=()=>ghost.remove();
+    setTimeout(()=>ghost.remove(),350);
+   }else ghost.remove();
+  }
+  if(to!==null){
+   const from=mode===2?coord2(d.i):d.i,dest=mode===2?coord2(to):to;
+   if(!current()&&mode===2&&pname(d.p)==='p'&&[0,7].includes(Math.floor(to/8)))promote(from,dest,true);
+   else choose(from,dest);
+  }else renderBoard();
+ }else press(d.i);
+}
+// Rook captures: synced from server move events, visible to both sides.
+let cinematicCapture=null;
+function cinematicRookCapture(previous,next){
+ const last=next.last;if(!last||last.from==null||last.to==null)return false;
+ const from=next.mode===2?index2(last.from):last.from;
+ const to=next.mode===2?index2(last.to):last.to;
+ const fromCell=$('board').querySelector(`[data-idx="${from}"]`);
+ const toCell=$('board').querySelector(`[data-idx="${to}"]`);
+ if(!fromCell||!toCell)return false;
+ const a=fromCell.getBoundingClientRect(),b=toCell.getBoundingClientRect();
+ const old=previous.mode===2?(()=>{const rows=previous.fen.split(' ')[0].split('/'),pieces=Array(64).fill(null);rows.forEach((row,y)=>{let x=0;for(const ch of row){if(/\d/.test(ch))x+=Number(ch);else pieces[y*8+x++]=(ch===ch.toUpperCase()?'w:':'b:')+ch.toLowerCase();}});return pieces[from];})():previous.board[from];
+ if(!old||pname(old)!=='r')return false;
+ const destPiece=toCell.querySelector('.piece');if(destPiece)destPiece.classList.add('cinema-hidden');
+ const ghost=document.createElement('div');ghost.className='piece cinema-rook '+owner(old);ghost.textContent='♜';
+ ghost.style.fontSize=(b.width*.82)+'px';ghost.style.left=(a.left+a.width/2)+'px';ghost.style.top=(a.top+a.height/2)+'px';
+ document.body.append(ghost);
+ const duration=1800;
+ const anim=ghost.animate([
+ {left:(a.left+a.width/2)+'px',top:(a.top+a.height/2)+'px',transform:'translate(-50%,-50%) scale(1) rotate(-8deg)',offset:0},
+ {left:(a.left+a.width/2+(b.left-a.left)*.25)+'px',top:(a.top+a.height/2+(b.top-a.top)*.25)+'px',transform:'translate(-50%,-50%) scale(1.32) rotate(-5deg)',offset:.45},
+ {left:(b.left+b.width/2)+'px',top:(b.top+b.height/2)+'px',transform:'translate(-50%,-50%) scale(1.08) rotate(0deg)',offset:1}
+ ],{duration,easing:'cubic-bezier(.3,.05,.35,1)',fill:'forwards'});
+ const msg=document.createElement('div');msg.className='cinema-title';msg.textContent='THE ROOOOCK!';document.body.append(msg);
+ setTimeout(()=>msg.classList.add('cinema-show'),80);
+ const cleanup=()=>{ghost.remove();msg.remove();destPiece?.classList.remove('cinema-hidden');};
+ anim.onfinish=()=>{cleanup();spawnCinematicExplosion(to);};
+ setTimeout(()=>{cleanup();},duration+300);
+ return true;
+}
 function renderBoard(){if(!state)return;const b=$('board'),multi=mode===3,n=multi?12:8,pieces=multi?state.board:normalize2();b.classList.toggle('three',multi);const flip=state.role==='b'&&mode===2;const legal=select!=null&&current()?legalTargets(multi?select:coord2(select)):new Set();b.replaceChildren();for(let r=0;r<n;r++)for(let col=0;col<n;col++){
  const x=flip?n-1-col:col,y=flip?n-1-r:r,idx=y*n+x,p=pieces[idx];const el=document.createElement('div');el.className='square '+((x+y)%2?'dark':'light');el.dataset.idx=idx;
  if(select===idx)el.classList.add('selected');if(premove&&(premove.from===(multi?idx:coord2(idx))||premove.to===(multi?idx:coord2(idx))))el.classList.add('premove');if(state.last&&(state.last.from===(multi?idx:coord2(idx))||state.last.to===(multi?idx:coord2(idx))))el.classList.add('last');if(legal.has(multi?idx:coord2(idx)))el.classList.add(p?'capture':'legal');
